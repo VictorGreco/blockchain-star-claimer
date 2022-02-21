@@ -4,10 +4,11 @@
   "description": "This project creates a Blockchain application to store data into the blocks",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node app.js"
   },
   "author": "Udacity - jose.morales@udacity.com",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "bitcoinjs-lib": "^4.0.3",
     "bitcoinjs-message": "^2.0.0",
