@@ -9,6 +9,7 @@
  */
 
 const SHA256 = require('crypto-js/sha256');
+const hex2ascii = require('hex2ascii');
 const BlockClass = require('./block.js');
 const bitcoinMessage = require('bitcoinjs-message');
 
@@ -34,7 +35,7 @@ class Blockchain {
      * Passing as a data `{data: 'Genesis Block'}`
      */
     async initializeChain() {
-        if( this.height === -1){
+        if(this.height === -1){
             let block = new BlockClass.Block({data: 'Genesis Block'});
             await this._addBlock(block);
         }
@@ -66,6 +67,12 @@ class Blockchain {
 
         return new Promise(async (resolve, reject) => {
            try {
+            const chainInconsistencies = await self.validateChain();
+
+            if (chainInconsistencies.length > 0) {
+                reject(new Error('Chain was tempered'));
+            }
+
             self.height += 1;
 
             const currentHeight = await self.getChainHeight();
@@ -98,7 +105,7 @@ class Blockchain {
      */
     requestMessageOwnershipVerification(address) {
         return new Promise((resolve) => {
-            
+            resolve(`${address}:${new Date().getTime().toString().slice(0,-3)}:starRegistry`);
         });
     }
 
@@ -122,6 +129,26 @@ class Blockchain {
     submitStar(address, message, signature, star) {
         let self = this;
         return new Promise(async (resolve, reject) => {
+            const time = parseInt(message.split(':')[1]);
+            const currentTime = parseInt(new Date().getTime().toString().slice(0, -3));
+            const isTimeElapsedLessThan5Minutes = currentTime - time < (5 * 60 * 1000);
+
+            if (isTimeElapsedLessThan5Minutes) {
+
+                if (bitcoinMessage.verify(message, address, signature)) {
+                    const block = new BlockClass.Block({ data: {
+                        ...star,
+                        owner: address
+                    }});
+
+                    resolve(self._addBlock(block));
+                } else {
+                    reject(new Error('Message, adress or signature are wrong'));
+                }
+
+            } else {
+                reject(new Error('Transaction was signed more than 5 minutes ago'));
+            }
             
         });
     }
@@ -173,7 +200,9 @@ class Blockchain {
         let self = this;
         let stars = [];
         return new Promise((resolve, reject) => {
-            
+            let stars = self.chain.filter(block => JSON.parse(hex2ascii(block.body)).owner === address);
+
+            resolve(stars);
         });
     }
 
@@ -187,7 +216,17 @@ class Blockchain {
         let self = this;
         let errorLog = [];
         return new Promise(async (resolve, reject) => {
-                
+            for (let block of self.chain) {
+                const previousBlock = self.chain[block.height - 1];
+
+                if (!!previousBlock) { // if not previous block we are checking the genesis block.
+                    if (previousBlock.hash !== block.previousBlockHash) {
+                        errorLog.push(new Error(`Block ${block.height} and Block ${previousBlock.height} are not related anymore`));
+                    }
+                }
+            }
+
+            resolve(errorLog);
         });
     }
 
